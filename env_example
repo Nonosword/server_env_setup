@@ -1,0 +1,41 @@
+# for server pre-configuration, domains and xray json.
+SERVER_MAPPING={"1": "server_1", "2": "server_2", "3": "server_3"}
+DOMAIN_MAPPING={"server_1": ["domain_1"], "server_2": ["domain_2", "domain_2_2"], "server_3": ["domain_3"]}
+
+# for xray and xray REALITY
+XRAY_CLIENTS={"server_1": [{"id": "uuid", "flow": "xtls-rprx-vision", "level": 0, "email": "email"}], "server_2": [{"id": "uuid", "flow": "xtls-rprx-vision", "level": 0, "email": "email"}], "server_3": [{"id": "uuid", "flow": "xtls-rprx-vision", "level": 0, "email": "email"}]}
+XRAY_REALITY_DEST='REALITY TARGET:443'
+XRAY_SERVER_NAME=["server1", "server2"]
+XRAY_REALITY_KEY='xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+XRAY_shortIds=["xx", "xxxx"]
+
+# for acme.sh
+EAB_KID='xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+EAB_KEY='ndt-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+
+CF_Token="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+CF_Account_ID="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+CF_Zone_ID_domain_1="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+CF_Zone_ID_domain_2="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+CF_Zone_ID_domain_2_2="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+CF_Zone_ID_domain_3="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+# CF_api_key_xxxx only used for MAIN DOMAIN DDNS
+CF_api_key_domain_1='xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+CF_api_key_domain_2='xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+CF_api_key_domain_2_2='xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+CF_api_key_domain_3='xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+
+# for yidadaa/chatgpt-next-web
+OPENAI_API_KEY='sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+WEBCHAT_PASSCODE='WEBCHAT_PASSCODE'
+
+# for custom git clone repos
+GITHUB_REPOS=[{"name": "server_env_setup", "path": "Nonosword/server_env_setup"}, {"name": "server_env_setup", "path": "Nonosword/server_env_setup"}, {"name": "server_env_setup", "path": "Nonosword/server_env_setup"}]
+
+# for class SafetyPractices()
+SSH_KEY_server_1='ssh-rsa AAAAB'
+SSH_KEY_server_2='ssh-rsa AAAAB'
+SSH_KEY_server_3='ssh-rsa AAAAB'
+CUSTOM_SSH_PORT='2202'
+

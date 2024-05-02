@@ -1,0 +1,11 @@
+# Byte-compiled
+**/__pycache__/
+
+# Distribution / packaging
+.Python
+test/
+
+# Service ENV
+**/.env
+**/github_key
+**/*.bak

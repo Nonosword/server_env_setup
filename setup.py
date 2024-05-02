@@ -34,10 +34,9 @@ def load_env(base_dir):
 
 
 def run_command(command, error_message, input=None):
-    env = dict(os.environ, DEBIAN_FRONTEND='noninteractive')
-    try:
-        process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
-        
+    try:       
+        process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=os.environ)
+
         stdout_content = []
         stderr_content = []
         # Set the stdout and stderr output streams as-is
@@ -266,13 +265,13 @@ class InstallSysComponents:
 
     def install_requirements(self):
         print("--- Installing apt environment requirements...")
-        # Interrupting the apt-get process may cause corruption of the dpkg database. If necessary, run "sudo dpkg --configure -a" to repair it.
+        # Interrupting the apt process may cause corruption of the dpkg database. If necessary, run "sudo dpkg --configure -a" to repair it.
         commands = [
-            ['sudo', 'apt-get', 'clean', 'all', '-y'],
-            ['sudo', 'apt-get', 'update', '-y'],
-            # ['sudo', 'apt-get', 'upgrade', '-y'],
-            ['sudo', 'apt-get', 'autoremove', '-y'],
-            ['sudo', 'apt-get', 'install', '-y', 'curl', 'vim', 'git', 'python3.11-venv', 'php-fpm', 'php-xml', 'php-mbstring', 'php-gd', 'php-curl', 'php-zip', 'php-mysql', 'unzip', 'nginx', 'mariadb-server', 'libpam-google-authenticator']
+            ['sudo', 'apt', 'clean', 'all'],
+            ['sudo', 'apt', 'update'],
+            ['sudo', 'apt', 'upgrade', '-y', '-o', 'Dpkg::Options::="--force-confdef"', '-o', 'Dpkg::Options::="--force-confold"'],
+            ['sudo', 'apt', 'autoremove', '-y'],
+            ['sudo', 'apt', 'install', '-y', 'curl', 'vim', 'git', 'python3.11-venv', 'php-fpm', 'php-xml', 'php-mbstring', 'php-gd', 'php-curl', 'php-zip', 'php-mysql', 'unzip', 'nginx', 'mariadb-server', 'libpam-google-authenticator']
         ]
         for cmd in commands:
             run_command(cmd, f"Failed to run {' '.join(cmd)}")
@@ -288,6 +287,7 @@ class InstallSysComponents:
 
         # venv_python = venv_path / 'bin' / 'python'
         # run_command(['sudo', venv_python, '-m', 'pip', 'install', 'request', 'python-dotenv'], "Failed to install requirement.txt")
+
         return venv_path
 
 
@@ -403,7 +403,7 @@ class InstallPackages:
                 run_command(cmd, f"Failed to run {' '.join(cmd)}")
 
 
-    # Remember to set your key to sys env or .env.
+    # Remember to set your keys to sys env or .env file.
     def install_docker(self):
         gpg_path = '/usr/share/keyrings/docker-archive-keyring.gpg'
         platform = utility.get_platform()
@@ -725,7 +725,6 @@ au BufRead,BufNewFile *.conf set syntax=sh
                 xray_clients_json = os.getenv('XRAY_CLIENTS')
                 xray_clients = json.loads(xray_clients_json)
                 server_clients = xray_clients.get(self.server, [])
-                # server_clients = json.dumps(server_clients)
                 with open(target_file, 'r', encoding='utf-8') as file:
                     data = json.load(file)
                 for i in data['inbounds']:

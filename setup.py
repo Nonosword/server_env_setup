@@ -1,5 +1,6 @@
 import os
 import sys
+import re
 import json
 import shutil
 import select
@@ -20,7 +21,8 @@ xray_mapping = {
 
 def load_env(base_dir):
     # Load local .env manually, as python-dotenv needs to be installed into a venv, which not right now.
-    print("--- Loading .env to sys env, manually...")
+    print("->> Loading .env to sys env, manually...")
+
     env_path = base_dir / '.env'
     env_lines = env_path.read_text(encoding='utf-8').splitlines()
     for line in env_lines:
@@ -28,7 +30,8 @@ def load_env(base_dir):
         if line and not line.startswith('#'):
             key, value = line.split('=', 1)
             os.environ[key] = value.strip("'").strip('"')
-    
+            print("--- .env loaded to  sys environ.")
+
     os.environ['DEBIAN_FRONTEND']='noninteractive'
     os.environ['UBUNTU_FRONTEND']='noninteractive'
 
@@ -170,7 +173,7 @@ class Utility():
 
     def get_platform(self):
         try:
-            with open('/etc/os-release') as f:
+            with Path('/etc/os-release').read_text() as f:
                 lines = f.readlines()
                 info = {line.split('=')[0]: line.split('=')[1].strip().replace('"', '') for line in lines}
             if 'debian' in info.get('ID', '').lower():
@@ -185,6 +188,8 @@ class Utility():
 
 class SafetyPractices:
     def __init__(self, server):
+        print("->> Starting security setting...")
+
         self.server = server
         self.ssh_port = os.getenv('CUSTOM_SSH_PORT')
         self.ssh_pub_key = os.getenv(f'SSH_KEY_{server}')
@@ -201,6 +206,8 @@ class SafetyPractices:
     # Double check your key pair, or you may not be able to login via SSH the next time you connect.
     # Writing key into '~/.ssh/authorized_keys'
     def apply_authorized_keys(self):
+        print("->> Sending ssh pubkey to 'authorized_keys'")
+
         with self.authorized_keys.open('a', encoding='utf-8') as f:
             f.write(f"\n{self.ssh_pub_key}\n")
 
@@ -210,6 +217,8 @@ class SafetyPractices:
 
     # As you can see, replace PORT to your own like, and force enable PUBKEY ONLY mode.
     def apply_sshd_reconfig(self):
+        print("->> Reconfiging sshd service...")
+
         sshd_reconfig = {
             'Port 22': f'Port {self.ssh_port}',
             # 'PermitRootLogin': 'PermitRootLogin no',
@@ -217,9 +226,7 @@ class SafetyPractices:
             'PasswordAuthentication yes': 'PasswordAuthentication no',
         }
 
-        print("--- Reconfiging sshd service...")
         lines = self.sshd_config.read_text().splitlines()
-
         new_content = []
         for line in lines:
             for old, new in sshd_reconfig.items():
@@ -244,7 +251,8 @@ class SafetyPractices:
 
     # Enable UFW, and adding 80 443, and your new ssh port.
     def apply_ufw(self):
-        print("--- Adding ufw rules...")
+        print("-->> Adding ufw rules...")
+
         ufw_commands = [
             ['sudo', 'apt-get', 'install', '-y', 'ufw'],
             ['sudo', 'ufw', 'allow', '443/tcp'],
@@ -256,7 +264,7 @@ class SafetyPractices:
             run_command(cmd, f"Failed to run {' '.join(cmd)}")
 
         print("--- enable ufw.")
-        run_command(['sudo', 'ufw', 'enable'], "", input='y\n'.encode())
+        subprocess.run(['y | sudo ufw enable'], check=True, text=True, shell=True)
 
 
 class InstallSysComponents:
@@ -264,7 +272,8 @@ class InstallSysComponents:
         pass
 
     def install_requirements(self):
-        print("--- Installing apt environment requirements...")
+        print("->> Installing apt environment requirements...")
+
         # Interrupting the apt process may cause corruption of the dpkg database. If necessary, run "sudo dpkg --configure -a" to repair it.
         commands = [
             ['sudo', 'apt', 'clean', 'all'],
@@ -279,6 +288,8 @@ class InstallSysComponents:
 
     # Well, there are many reasons to create a python venv.
     def create_virtual_env(self, path):
+        print("->> Creating python virtual env")
+
         venv_name = "appvenv"
         venv_path = path / venv_name
         if not venv_path.exists():
@@ -295,9 +306,10 @@ class InstallSysComponents:
         # Usage: acme.sh + zerossl + cloudflare.
         # Thank them for promoting a free Internet.
         # 'eab_kid' and 'eab_hmac_key' can be obtained from zerossl website.
+        print("->> Installing acme.sh...")
+
         eab_kid = os.getenv('EAB_KID')
         eab_hmac_key = os.getenv('EAB_KEY')
-        print("--- Installing acme.sh...")
         user_path = os.path.expanduser('~')
 
         acme_sh = subprocess.check_output(['curl', '-sSL', 'https://get.acme.sh']).decode('utf-8')
@@ -314,7 +326,7 @@ class InstallSysComponents:
         for domain in domains:
         # This could take a while, be patient.
         # Issue certs and install them to their own path for each domain under the server you selected.
-            print(f"--- Issuing certificates for {domain}...")
+            print(f"--> Issuing certificates for {domain}...")
             
             os.environ['CF_Zone_ID'] = os.getenv(f'CF_Zone_ID_{domain}')
             cert_path = Path('/usr/local/nginx/conf/ssl/') / domain
@@ -353,7 +365,8 @@ class InstallPackages:
 
 
     def install_xray_core(self):
-        print("--- Installing xray_core...")
+        print("->> Installing xray_core...")
+
         script_url = "https://github.com/XTLS/Xray-install/raw/main/install-release.sh"
         command = [f'bash -c "$(curl -L {script_url})" @ install -u root']
         subprocess.run(command, check=True, text=True, shell=True)
@@ -361,16 +374,18 @@ class InstallPackages:
 
     # this can be used for any package installed using the wget unpack method.
     def wget_wwwroot_package(self, package, url):
+        print(f"->> Installing {package} from {url}")
+
         filename = urlparse(url).path.split('/')[-1]
         file_path = self.wwwroot_path / filename
         os.unlink(file_path) if os.path.isfile(file_path) else None  # fail safe
 
-        print(f"--- Downloading {package} {filename}...")
+        print(f"--> Downloading {package} {filename}...")
         run_command(['wget', url, '-P', self.wwwroot_path], f"Failed to download {package}")
-        print(f"--- Unzipping {package} {filename}...")
+        print(f"--> Unzipping {package} {filename}...")
         run_command(['unzip', '-n', file_path, '-d', self.wwwroot_path], f"Failed to unzip {package} file")
         # Attention! This will overwrite existing files, otherwise use '-n' instead of '-o'.
-        print(f"--- Removing {package} {filename}...")
+        print(f"--> Removing {package} {filename}...")
         os.unlink(file_path)
         
         if package == 'nextcloud':
@@ -382,13 +397,14 @@ class InstallPackages:
     # Source Repo: https://github.com/ChatGPTNextWeb/ChatGPT-Next-Web.
     def install_chatgpt_web(self):
         if not self.install_docker():
+            print("--- docker is not installed properly, skiping...")
             return
         
         image_name = 'yidadaa/chatgpt-next-web'
         openai_api_key = os.getenv('OPENAI_API_KEY')
         passcode = os.getenv('WEBCHAT_PASSCODE')
+        print(f"->> Installing docker {image_name}...")
 
-        print(f"--- Installing docker {image_name}...")
         stdout, _ = run_command(['sudo', 'docker', 'ps', '-q', '--filter', f"ancestor={image_name}"], "")
         if stdout:
             print(f"--- {image_name} is already running.")
@@ -405,6 +421,8 @@ class InstallPackages:
 
     # Remember to set your keys to sys env or .env file.
     def install_docker(self):
+        print("->> Installing docker CE...")
+
         gpg_path = '/usr/share/keyrings/docker-archive-keyring.gpg'
         platform = utility.get_platform()
         if platform == 'debian':
@@ -415,20 +433,20 @@ class InstallPackages:
             print("Platform not supported")
             return False
 
-        print(f"--- Installing docker requirements -> {platform}...")
+        print(f"--> Installing docker requirements -> {platform}...")
         run_command(['sudo', 'apt-get', 'install', '-y', 'apt-transport-https', 'ca-certificates', 'gnupg', 'lsb-release'], "Failed to install prerequisites.")
 
-        print("--- Installing docker GPG KEY...")
+        print("--> Installing docker GPG KEY...")
         curl_output = subprocess.check_output(['sudo', 'curl', '-fsSL', f'{docker_package}/gpg'])
         subprocess.run(['sudo', 'gpg', '--dearmor', '-o', gpg_path], input=curl_output, check=True)
 
-        print("--- Adding docker dpkg sources...")
+        print("--> Adding docker dpkg sources...")
         architecture, _ = run_command(['sudo', 'dpkg', '--print-architecture'],"")
         release, _ = run_command(['sudo', 'lsb_release', '-cs'],"")
         docker_list_content = f"deb [arch={architecture.strip()} signed-by={gpg_path}] {docker_package} {release.strip()} stable"
         Path('/etc/apt/sources.list.d/docker.list').write_text(docker_list_content)
 
-        print("--- Installing docker CE using apt-get...")
+        print("--> Installing docker CE using apt-get...")
         run_command(['sudo', 'apt-get', 'update', '-y'], "Failed to update package index.")
         run_command(['sudo', 'apt-get', 'install', '-y', 'docker-ce', 'docker-ce-cli', 'containerd.io'], "Failed to install Docker Engine.")
 
@@ -437,6 +455,8 @@ class InstallPackages:
 
 class SetupSSHGithub():
     def __init__(self) -> None:
+        print("->> Staring Github SSH key and private repo configuration...")
+
         github_repos = os.getenv('GITHUB_REPOS')
         self.github_repos = json.loads(github_repos)
 
@@ -518,12 +538,13 @@ Type your choice here: """))
 
 
     def check_ssh_connection(self):
-        print("--- Checking ssh git@github.com connection")
+        print("--> Checking ssh git@github.com connection")
+
         _, stderr = run_command(['ssh', '-T', 'git@github.com'],"", input='yes\n')
         if "successfully authenticated" in stderr:
             return True
         else:
-            print("SSH connection test failed:", stderr)
+            print("--- SSH connection test failed:", stderr)
             return False
 
 
@@ -588,6 +609,7 @@ class UpdateConfig:
 
 
     def enable_bbr(self):
+        print("->> Configuring BBR and sysctl.conf...")
         config_lines = [
             "net.core.default_qdisc = fq\n",
             "net.ipv4.tcp_congestion_control = bbr\n"
@@ -605,6 +627,8 @@ class UpdateConfig:
 
 
     def update_php_config(self): # for small vps
+        print("->> Updating php configs...")
+
         updates = {
             'pm = dynamic': 'pm = ondemand',
             'pm.max_children = ': 'pm.max_children = 4',
@@ -633,7 +657,6 @@ class UpdateConfig:
             Path(f'/etc/php/{self.php_v}/cli/php.ini')
         ]
 
-        print("--- Updating php configs...")
         for config_path in config_paths:
             lines = config_path.read_text().splitlines()
 
@@ -650,6 +673,8 @@ class UpdateConfig:
 
 
     def create_vimrc(self):
+        print("->> Creating .vimrc config...")
+
         vimrc = """
 set mouse-=a
 set tabstop=4
@@ -659,7 +684,6 @@ syntax on
 colorscheme default
 au BufRead,BufNewFile *.conf set syntax=sh
 """
-        print("--- Creating .vimrc config...")
         vimrc_path = Path('~/.vimrc').expanduser()
         with vimrc_path.open('a', encoding='utf-8') as f:
             f.write(f"\n{vimrc}\n")
@@ -685,7 +709,8 @@ au BufRead,BufNewFile *.conf set syntax=sh
 
 
     def replace_config(self):
-        print("--- Replacing nginx & xray config...")
+        print("->> Replacing nginx & xray config...")
+
         self.source_paths = {
             1: {"type":"nginx", "choice":1, "source_path": self.base_dir / 'config'/ 'nginx_nextcloud.conf', 'target_name':'nginx.conf'},
             2: {"type":"nginx", "choice":2, "source_path": self.base_dir / 'config'/ 'nginx_nextcloud_chatgpt.conf', 'target_name':'nginx.conf'},
@@ -709,38 +734,43 @@ au BufRead,BufNewFile *.conf set syntax=sh
             target_file = target_path / target_name
 
             if not target_file.exists():
-                print(f"{target_file} does not exists")
-                continue
+                print(f"--> {target_file} does not exists, creating new")
+                target_file.parent.mkdir(parents=True, exist_ok=True)
 
             shutil.copy(source_path, target_file)
             print(f"--- {source_path} -> {target_file}")
 
-            print("--- Replacing yourdomainname with real domain name...")
+            print("--> Replacing yourdomainname with real domain name...")
             content = target_file.read_text()
             new_content = content.replace('yourdomainname', self.domain) # only MAIN domain is used
             target_file.write_text(new_content)
 
             if type == 'xray':
-                print("--- Adding clients for Xray json...")
+                print("--> Removing single or multi-line comments in json files...")
+                content = target_file.read_text(encoding='utf-8')
+                cleaned_content = re.sub(r'//.*?\n|/\*.*?\*/', '', content, flags=re.S)
+                target_file.write_text(cleaned_content, encoding='utf-8')
+
+                print("--> Adding clients for Xray json...")
                 xray_clients_json = os.getenv('XRAY_CLIENTS')
                 xray_clients = json.loads(xray_clients_json)
                 server_clients = xray_clients.get(self.server, [])
-                with open(target_file, 'r', encoding='utf-8') as file:
+                with target_file.open('r', encoding='utf-8') as file:
                     data = json.load(file)
                 for i in data['inbounds']:
                     i['settings']['clients'] = server_clients
 
-                with open(target_file, 'w', encoding='utf-8') as file:
+                with target_file.open('w', encoding='utf-8') as file:
                     json.dump(data, file, indent=4)
 
                 if self.xray_choice == 2:
-                    print("--- Adding REALITY configs...")
+                    print("--> Adding REALITY configs...")
                     xray_reality_dest = os.getenv('XRAY_REALITY_DEST') 
                     xray_server_name = os.getenv('XRAY_SERVER_NAME') 
                     xray_reality_key = os.getenv('XRAY_REALITY_KEY') 
                     xray_shortids = os.getenv('XRAY_shortIds') 
 
-                    with open(target_file, 'r', encoding='utf-8') as file:
+                    with target_file.open('r', encoding='utf-8') as file:
                         data = json.load(file)
                     for i in data['inbounds']:
                         settings = i['streamSettings']['realitySettings']
@@ -749,7 +779,7 @@ au BufRead,BufNewFile *.conf set syntax=sh
                         settings['privateKey'] = xray_reality_key
                         settings['shortIds'] = json.loads(xray_shortids)
 
-                    with open(target_file, 'w', encoding='utf-8') as file:
+                    with target_file.open('w', encoding='utf-8') as file:
                         json.dump(data, file, indent=4)
 
 
@@ -771,23 +801,23 @@ if __name__ == '__main__':
     server = server_mapping[server_choice]
     domains = domain_mapping.get(server, [])
 
-    print(">>> Secure system environment...")
-    SafetyPractices(server)
+    # print(">>> Secure system environment...")
+    # SafetyPractices(server)
 
-    print(">>> Starting system dependency installation...")
-    install_comps.install_requirements()
+    # print(">>> Starting system dependency installation...")
+    # install_comps.install_requirements()
 
-    print(">>> Creating python virtual env...")
-    install_comps.create_virtual_env(Path('~/').expanduser())
+    # print(">>> Creating python virtual env...")
+    # install_comps.create_virtual_env(Path('~/').expanduser())
 
-    print(">>> Installing and setup acme.sh...")
-    install_comps.setup_acme_cert(domains)
+    # print(">>> Installing and setup acme.sh...")
+    # install_comps.setup_acme_cert(domains)
 
-    print(">>> Installing selected packages...")
-    InstallPackages(package_choice)
+    # print(">>> Installing selected packages...")
+    # InstallPackages(package_choice)
 
-    print(">>> Setup Git@Github SSH Connection")
-    SetupSSHGithub()
+    # print(">>> Setup Git@Github SSH Connection")
+    # SetupSSHGithub()
 
     # print(">>> Setting up Mysql...")
     # run'sudo mysql_secure_installation' manually

@@ -30,13 +30,15 @@ def load_env(base_dir):
         if line and not line.startswith('#'):
             key, value = line.split('=', 1)
             os.environ[key] = value.strip("'").strip('"')
-            print("--- .env loaded to  sys environ.")
 
     os.environ['DEBIAN_FRONTEND']='noninteractive'
     os.environ['UBUNTU_FRONTEND']='noninteractive'
 
+    print("--- .env loaded to  sys environ.")
+
 
 def run_command(command, error_message, input=None):
+    printout = os.getenv('CMD_DETAIL_OUTPUT', 'show') == 'show'
     try:       
         process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=os.environ)
 
@@ -52,13 +54,14 @@ def run_command(command, error_message, input=None):
                     read = process.stdout.readline()
                     if read:
                         stdout_content.append(read.strip())
-                        if "(Reading database" not in read and "Selecting previously unselected package" not in read and "Preparing to unpack" not in read and "Unpacking" not in read and "inflating:" not in read:
+                        if printout and "(Reading database" not in read and "Selecting previously unselected package" not in read and "Preparing to unpack" not in read and "Unpacking" not in read and "inflating:" not in read:
                             print(read.strip())
                 elif fd == process.stderr.fileno():
                     read = process.stderr.readline()
                     if read:
                         stderr_content.append(read.strip())
-                        print(read.strip())
+                        if printout:
+                            print(read.strip())
 
             # Check whether the caller's process has ended. different between 'Popen' and 'run'
             if process.poll() is not None:
@@ -72,13 +75,15 @@ def run_command(command, error_message, input=None):
 
         # Return the stdout and stderr feedback to caller:
         if process.returncode != 0:
-            print("-- E1:", error_message)
+            if printout:
+                print("-- E1:", error_message)
             return '\n'.join(stdout_content), '\n'.join(stderr_content)
 
         return '\n'.join(stdout_content), '\n'.join(stderr_content)
 
     except Exception as e:
-        print("-- E2:", str(e))
+        if printout:
+            print("-- E2:", str(e))
         sys.exit(1)
 
 
@@ -133,6 +138,12 @@ class Utility():
             except ValueError:
                 print("Invalid input: please enter a number.")
 
+        # Set sys env to control run command output mode.
+        confirm = utility.prompt_confirmation("------------------------------\nShow script command detail?", True)
+        if confirm:
+            os.environ['CMD_DETAIL_OUTPUT'] = 'show'
+        else:
+            os.environ['CMD_DETAIL_OUTPUT'] = 'none'
         return server_choice, package_choice, xray_choice
 
 
@@ -251,20 +262,18 @@ class SafetyPractices:
 
     # Enable UFW, and adding 80 443, and your new ssh port.
     def apply_ufw(self):
-        print("-->> Adding ufw rules...")
+        print("-->> Adding ufw rules and reloading ufw service...")
 
         ufw_commands = [
             ['sudo', 'apt-get', 'install', '-y', 'ufw'],
             ['sudo', 'ufw', 'allow', '443/tcp'],
             ['sudo', 'ufw', 'allow', '80/tcp'],
             ['sudo', 'ufw', 'allow', f'{self.ssh_port}/tcp'],
-            ['sudo', 'ufw', 'allow', '22/tcp']
+            ['sudo', 'ufw', 'allow', '22/tcp'],
+            ['sudo', 'ufw', '--force', 'enable']
         ]
         for cmd in ufw_commands:
             run_command(cmd, f"Failed to run {' '.join(cmd)}")
-
-        print("--- enable ufw.")
-        subprocess.run(['y | sudo ufw enable'], check=True, text=True, shell=True)
 
 
 class InstallSysComponents:
@@ -293,7 +302,7 @@ class InstallSysComponents:
         venv_name = "appvenv"
         venv_path = path / venv_name
         if not venv_path.exists():
-            run_command(['sudo', sys.executable, '-m', 'venv', venv_path], "Failed to create virtual environment")
+            run_command(['sudo', sys.executable, '-m', 'venv', venv_path], "Unable to create virtual environment")
             print(f"--- Python venv created: {venv_path}...")
 
         # venv_python = venv_path / 'bin' / 'python'
@@ -405,7 +414,7 @@ class InstallPackages:
         passcode = os.getenv('WEBCHAT_PASSCODE')
         print(f"->> Installing docker {image_name}...")
 
-        stdout, _ = run_command(['sudo', 'docker', 'ps', '-q', '--filter', f"ancestor={image_name}"], "")
+        stdout, _ = run_command(['sudo', 'docker', 'ps', '-q', '--filter', f"ancestor={image_name}"], "Unable to check docker process list")
         if stdout:
             print(f"--- {image_name} is already running.")
             return
@@ -441,8 +450,8 @@ class InstallPackages:
         subprocess.run(['sudo', 'gpg', '--dearmor', '-o', gpg_path], input=curl_output, check=True)
 
         print("--> Adding docker dpkg sources...")
-        architecture, _ = run_command(['sudo', 'dpkg', '--print-architecture'],"")
-        release, _ = run_command(['sudo', 'lsb_release', '-cs'],"")
+        architecture, _ = run_command(['sudo', 'dpkg', '--print-architecture'], "Failed to run dpkg --print-architecture")
+        release, _ = run_command(['sudo', 'lsb_release', '-cs'], "Failed to run lsb_release -cs")
         docker_list_content = f"deb [arch={architecture.strip()} signed-by={gpg_path}] {docker_package} {release.strip()} stable"
         Path('/etc/apt/sources.list.d/docker.list').write_text(docker_list_content)
 
@@ -489,7 +498,7 @@ class SetupSSHGithub():
                     path = repo['path']
 
                     print(f"--- Processing git clone <{name}>...")
-                    _, stderr = run_command(['git', 'clone', f'git@github.com:{path}.git'],"") # Checking git feedback
+                    _, stderr = run_command(['git', 'clone', f'git@github.com:{path}.git'], "") # Checking git feedback
                     if "already exists" in stderr:
                         print("--- Reop dir already exists, use 'git pull origin master/main' instead.\n")
                         continue
@@ -540,7 +549,7 @@ Type your choice here: """))
     def check_ssh_connection(self):
         print("--> Checking ssh git@github.com connection")
 
-        _, stderr = run_command(['ssh', '-T', 'git@github.com'],"", input='yes\n')
+        _, stderr = run_command(['ssh', '-T', 'git@github.com'], "", input='yes\n')
         if "successfully authenticated" in stderr:
             return True
         else:
@@ -822,7 +831,7 @@ if __name__ == '__main__':
     # print(">>> Setting up Mysql...")
     # run'sudo mysql_secure_installation' manually
 
-    php_v, _ = run_command(['php', '-v'], "")
+    php_v, _ = run_command(['php', '-v'], "Failed to run print php version.")
     php_v = ".".join(php_v.split()[1].split('.')[:2])
 
     print(">>> Updating configs...")

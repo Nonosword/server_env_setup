@@ -1,6 +1,13 @@
+# for class SafetyPractices()
+CUSTOM_SSH_PORT='2202'
+
+SSH_KEY_server_1='ssh-rsa AAAAB'
+SSH_KEY_server_2='ssh-rsa AAAAB'
+SSH_KEY_server_3='ssh-rsa AAAAB'
+
+
 # for server pre-configuration, domains and xray json.
-SERVER_MAPPING={"1": "server_1", "2": "server_2", "3": "server_3"}
-DOMAIN_MAPPING={"server_1": ["domain_1"], "server_2": ["domain_2", "domain_2_2"], "server_3": ["domain_3"]}
+SERVER_MAPPING=[{"name": "server_1", "domain": ["domain_1"]}, {"name": "server_2", "domain": ["domain_2", "domain_2_2"]}, {"name": "server_3", "domain": ["domain_3"]}]
 
 # for xray and xray REALITY
 XRAY_CLIENTS={"server_1": [{"id": "uuid", "flow": "xtls-rprx-vision", "level": 0, "email": "identifier"}], "server_2": [{"id": "uuid", "flow": "xtls-rprx-vision", "level": 0, "email": "identifier"}], "server_3": [{"id": "uuid", "flow": "xtls-rprx-vision", "level": 0, "email": "identifier"}]}
@@ -8,6 +15,11 @@ XRAY_REALITY_DEST='REALITY TARGET:443'
 XRAY_SERVER_NAME=["server1", "server2"]
 XRAY_REALITY_KEY='xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
 XRAY_shortIds=["xx", "xxxx"]
+
+
+# for custom git clone repos
+GITHUB_REPOS=[{"name": "server_env_setup", "path": "Nonosword/server_env_setup", "type": "public"}, {"name": "server_env_setup", "path": "Nonosword/server_env_setup", "type": "public"}, {"name": "server_env_setup", "path": "Nonosword/server_env_setup", "type": "public"}]
+
 
 # for acme.sh
 EAB_KID='xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
@@ -29,13 +41,4 @@ CF_api_key_domain_3='xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
 # for yidadaa/chatgpt-next-web
 OPENAI_API_KEY='sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
 WEBCHAT_PASSCODE='WEBCHAT_PASSCODE'
-
-# for custom git clone repos
-GITHUB_REPOS=[{"name": "server_env_setup", "path": "Nonosword/server_env_setup"}, {"name": "server_env_setup", "path": "Nonosword/server_env_setup"}, {"name": "server_env_setup", "path": "Nonosword/server_env_setup"}]
-
-# for class SafetyPractices()
-SSH_KEY_server_1='ssh-rsa AAAAB'
-SSH_KEY_server_2='ssh-rsa AAAAB'
-SSH_KEY_server_3='ssh-rsa AAAAB'
-CUSTOM_SSH_PORT='2202'
 

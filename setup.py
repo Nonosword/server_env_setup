@@ -88,25 +88,40 @@ def run_command(command, error_message, input=None):
 
 
 class Utility():
-    def __init__(self, server_mapping) -> None:
+    def __init__(self, server_mapping, github_repos) -> None:
         self.server_mapping = server_mapping
+        self.github_repos = github_repos
 
 
     def get_input_variable(self):
+        # Continue looping until exiting manually, or an unexpected error occurs. 
         # SERVER hostname variable, use to check and setup server domains, xray configs, acme keys, ddns keys.
+
+        # Set sys env to control run command output mode.
+        confirm = utility.prompt_confirmation("------------------------------\nShow script command detail?", True)
+        if confirm:
+            os.environ['CMD_DETAIL_OUTPUT'] = 'show'
+        else:
+            os.environ['CMD_DETAIL_OUTPUT'] = 'none'
+
+
         while True:
             print("------------------------------\nSelect a SERVER config pack:")
-            for key, value in self.server_mapping.items():
-                print(f"{key}: {value}")
+            for index, server_pack in enumerate(self.server_mapping):
+                print(f"{index + 1}: {server_pack['name']} - {server_pack['domain']}")
             try:
                 server_choice = int(input("------------------------------\nSelect a server to continute: "))
-                if server_choice in self.server_mapping:
-                    print(f"--- SERVER config pack selected: {self.server_mapping[server_choice]}...")
+                if 0 <= server_choice -1 <= len(self.server_mapping):
+                    server_pack = self.server_mapping[server_choice -1]
+                    server = server_pack['name']
+                    domains = server_pack['domain']
+                    print(f"--- SERVER config pack selected: {server} - {domains}...")
                     break
                 else:
                     print("Invalid choice, try again.")
             except ValueError:
                 print("Invalid input: please enter a number.")
+
 
         # Nginx config types, pre configured and easy to conbine and replace.
         while True:
@@ -123,6 +138,7 @@ class Utility():
             except ValueError:
                 print("Invalid input: please enter a number.")
 
+
         # Xray-core configs, pre configured.
         while True:
             print("------------------------------\nSelect XRAY config type:")
@@ -138,17 +154,43 @@ class Utility():
             except ValueError:
                 print("Invalid input: please enter a number.")
 
-        # Set sys env to control run command output mode.
-        confirm = utility.prompt_confirmation("------------------------------\nShow script command detail?", True)
-        if confirm:
-            os.environ['CMD_DETAIL_OUTPUT'] = 'show'
-        else:
-            os.environ['CMD_DETAIL_OUTPUT'] = 'none'
-        return server_choice, package_choice, xray_choice
+        selected_repos = []
+        while True:
+            print("\n------------------------------\nGithub repo list: ")
+            for index, repo in enumerate(self.github_repos):
+                print(f"{index + 1}: {repo['name']}")
+
+            try:
+                repo_choice = int(input("------------------------------\nChoose a repo to clone list (0 to exit): "))
+                if repo_choice == 0:
+                    break
+                elif 1 <= repo_choice <= len(self.github_repos):
+                    repo = self.github_repos[repo_choice -1]
+                    name = repo['name']
+                    if repo_choice -1 in selected_repos:
+                        print(f"--- repo <{name}> already in the list.")
+                        continue
+                    selected_repos.append(repo_choice -1)
+                    print(f"--- repo <{name}> added to git clone list...\n")
+                    print(selected_repos) # test
+
+                    print("------------------------------\nCurrent git clone list: ")
+                    for i in selected_repos:
+                        repo = self.github_repos[i]
+                        name = repo['name']
+                        print(f"--- {name}")
+                    continue
+
+                else:
+                    print("Invalid repo id")
+            except ValueError:
+                print("Invalid input: please enter a number.")
+
+        return server, domains, package_choice, xray_choice, selected_repos
 
 
-    # A confirmation "prompt" for double-checking high-risk actions.
     def prompt_confirmation(self, prompt, default=False):
+    # A confirmation "prompt" for double-checking high-risk actions.
         valid_choices = {
             'y': True,
             'yes': True,
@@ -172,8 +214,8 @@ class Utility():
             print("Invalid input, try again.")
 
 
-    # To chekc whether WORDS in FILE.
     def check_config_exsits(self, file_path, content):
+    # To chekc whether WORDS in FILE.
         try:
             if content in Path(file_path).read_text():
                 return True
@@ -463,11 +505,8 @@ class InstallPackages:
 
 
 class SetupSSHGithub():
-    def __init__(self) -> None:
+    def __init__(self, github_repos, selected_repos) -> None:
         print("->> Staring Github SSH key and private repo configuration...")
-
-        github_repos = os.getenv('GITHUB_REPOS')
-        self.github_repos = json.loads(github_repos)
 
         # new key and config will write to this file
         self.key_dir = Path('~/.ssh').expanduser()
@@ -477,36 +516,22 @@ class SetupSSHGithub():
         # Checking github via ssh, for git clone private repo.
         # TODO, skip ssh connetcion check if there;s no private repo on the list.
         if self.setup_git_ssh_conn():
-            self.ssh_git_clone()
+            self.git_clone_selected(selected_repos)
         return
 
 
-    def ssh_git_clone(self):
-        # Continue looping until exiting manually, or an unexpected error occurs. 
-        while True:
-            print("------------------------------\nGithub repo list: ")
-            for index, repo in enumerate(self.github_repos):
-                print(f"{index + 1}: {repo['name']}")
+    def git_clone_selected(self, selected_repos):
+        for i in selected_repos:
+            repo = self.github_repos[i]
+            name = repo['name']
+            path = repo['path']
 
-            try:
-                repo_choice = int(input("------------------------------\nChoose a repo to clone (0 to exit): "))
-                if repo_choice == 0:
-                    break
-                elif 1 <= repo_choice <= len(self.github_repos):
-                    repo = self.github_repos[repo_choice -1]
-                    name = repo['name']
-                    path = repo['path']
+            print(f"--- Processing git clone <{name}>...")
+            _, stderr = run_command(['git', 'clone', f'git@github.com:{path}.git'], "") # Checking git feedback
 
-                    print(f"--- Processing git clone <{name}>...")
-                    _, stderr = run_command(['git', 'clone', f'git@github.com:{path}.git'], "") # Checking git feedback
-                    if "already exists" in stderr:
-                        print("--- Reop dir already exists, use 'git pull origin master/main' instead.\n")
-                        continue
-                else:
-                    print("Invalid repo id")
-            except ValueError:
-                print("Invalid input: please enter a number.")
-
+            if "already exists" in stderr:
+                print("--- Reop dir already exists, use 'git pull origin master/main' instead.\n")
+                continue
 
     # Checking ssh connection to github; 
     # or pin point a exist key to copy to target key file, 
@@ -796,19 +821,16 @@ if __name__ == '__main__':
     BASE_DIR = Path(__file__).resolve().parent
 
     load_env(BASE_DIR)
+
     server_mapping = os.getenv('SERVER_MAPPING')
     server_mapping = json.loads(server_mapping)
-    server_mapping = {int(k): v for k, v in server_mapping.items()}
-
-    domain_mapping = os.getenv('DOMAIN_MAPPING')
-    domain_mapping = json.loads(domain_mapping)
-
-    utility = Utility(server_mapping)
+    github_repos = os.getenv('GITHUB_REPOS')
+    github_repos = json.loads(github_repos)
+    
+    utility = Utility(server_mapping, github_repos)
     install_comps = InstallSysComponents()
 
-    server_choice, package_choice, xray_choice = utility.get_input_variable()
-    server = server_mapping[server_choice]
-    domains = domain_mapping.get(server, [])
+    server, domains, package_choice, xray_choice, selected_repos = utility.get_input_variable()
 
     print(">>> Secure system environment...")
     SafetyPractices(server)
@@ -826,7 +848,7 @@ if __name__ == '__main__':
     InstallPackages(package_choice)
 
     print(">>> Setup Git@Github SSH Connection")
-    SetupSSHGithub()
+    SetupSSHGithub(github_repos, selected_repos)
 
     # print(">>> Setting up Mysql...")
     # run'sudo mysql_secure_installation' manually

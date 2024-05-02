@@ -3,7 +3,7 @@ SERVER_MAPPING={"1": "server_1", "2": "server_2", "3": "server_3"}
 DOMAIN_MAPPING={"server_1": ["domain_1"], "server_2": ["domain_2", "domain_2_2"], "server_3": ["domain_3"]}
 
 # for xray and xray REALITY
-XRAY_CLIENTS={"server_1": [{"id": "uuid", "flow": "xtls-rprx-vision", "level": 0, "email": "email"}], "server_2": [{"id": "uuid", "flow": "xtls-rprx-vision", "level": 0, "email": "email"}], "server_3": [{"id": "uuid", "flow": "xtls-rprx-vision", "level": 0, "email": "email"}]}
+XRAY_CLIENTS={"server_1": [{"id": "uuid", "flow": "xtls-rprx-vision", "level": 0, "email": "identifier"}], "server_2": [{"id": "uuid", "flow": "xtls-rprx-vision", "level": 0, "email": "identifier"}], "server_3": [{"id": "uuid", "flow": "xtls-rprx-vision", "level": 0, "email": "identifier"}]}
 XRAY_REALITY_DEST='REALITY TARGET:443'
 XRAY_SERVER_NAME=["server1", "server2"]
 XRAY_REALITY_KEY='xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'

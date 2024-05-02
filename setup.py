@@ -801,23 +801,23 @@ if __name__ == '__main__':
     server = server_mapping[server_choice]
     domains = domain_mapping.get(server, [])
 
-    # print(">>> Secure system environment...")
-    # SafetyPractices(server)
+    print(">>> Secure system environment...")
+    SafetyPractices(server)
 
-    # print(">>> Starting system dependency installation...")
-    # install_comps.install_requirements()
+    print(">>> Starting system dependency installation...")
+    install_comps.install_requirements()
 
-    # print(">>> Creating python virtual env...")
-    # install_comps.create_virtual_env(Path('~/').expanduser())
+    print(">>> Creating python virtual env...")
+    install_comps.create_virtual_env(Path('~/').expanduser())
 
-    # print(">>> Installing and setup acme.sh...")
-    # install_comps.setup_acme_cert(domains)
+    print(">>> Installing and setup acme.sh...")
+    install_comps.setup_acme_cert(domains)
 
-    # print(">>> Installing selected packages...")
-    # InstallPackages(package_choice)
+    print(">>> Installing selected packages...")
+    InstallPackages(package_choice)
 
-    # print(">>> Setup Git@Github SSH Connection")
-    # SetupSSHGithub()
+    print(">>> Setup Git@Github SSH Connection")
+    SetupSSHGithub()
 
     # print(">>> Setting up Mysql...")
     # run'sudo mysql_secure_installation' manually

@@ -5,10 +5,11 @@ from src.utility import run_command
 
 
 class SetupSSHGithub():
-    def __init__(self, github_repos, selected_repos) -> None:
+    def __init__(self, package_root, github_repos, venv_python) -> None:
         print("->> Staring Github SSH key and private repo configuration...")
+        self.package_root = package_root
         self.github_repos = github_repos
-        self.selected_repos = selected_repos
+        self.venv_python = venv_python
 
         # new key and config will write to this file
         self.key_dir = Path('~/.ssh').expanduser()
@@ -17,12 +18,7 @@ class SetupSSHGithub():
 
 
     def start_functions(self):
-        # Checking github via ssh, for git clone private repo.
-        # skip ssh connetcion check if there;s no private repo on the list.
-        all_public = all(repo['type'] == 'public' for repo in self.github_repos)
-        
-        ssh_checked = True if all_public else self.setup_git_ssh_conn()
-
+        ssh_checked = self.git_ssh_check()
         results = {
             'git_clone': self.git_clone_selected() if ssh_checked else False
         }
@@ -30,18 +26,103 @@ class SetupSSHGithub():
         return results
 
 
+    def git_ssh_check(self):
+        # Checking github via ssh, for git clone private repo.
+        # skip ssh connetcion check if there;s no private repo on the list.
+        all_public = all(repo['type'] == 'public' for repo in self.github_repos)
+        ssh_checked = True if all_public else self.setup_git_ssh_conn()
+
+        return ssh_checked
+
+
+    def select_repos(self):
+        ssh_checked = self.git_ssh_check()
+
+        self.selected_repos = []
+        while True:
+            print("\n------------------------------\nGithub repo list: ")
+            for index, repo in enumerate(self.github_repos):
+                print(f"{index + 1}: {repo['name']}")
+
+            try:
+                repo_choice = int(input("------------------------------\nChoose a repo to clone list (0 to exit): "))
+                if repo_choice == 0:
+                    break
+                elif 1 <= repo_choice <= len(self.github_repos):
+                    repo = self.github_repos[repo_choice -1]
+                    name = repo['name']
+                    if repo_choice -1 in self.selected_repos:
+                        print(f"--- repo <{name}> already in the list.")
+                        continue
+                    self.selected_repos.append(repo_choice -1)
+                    print(f"--- repo <{name}> added to git clone list...\n")
+                    print("------------------------------\nCurrent git clone list: ")
+                    for i in self.selected_repos:
+                        repo = self.github_repos[i]
+                        name = repo['name']
+                        print(f"--- {name}")
+                    continue
+
+                else:
+                    print("Invalid repo id")
+            except ValueError:
+                print("Invalid input: please enter a number.")
+
+        return self.selected_repos
+
+
     def git_clone_selected(self):
-        for i in self.selected_repos:
-            repo = self.github_repos[i]
+        all_success = True
+        for repo in self.selected_repos:
+            repo = self.github_repos[repo]
             name = repo['name']
             path = repo['path']
 
-            print(f"--- Processing git clone <{name}>...")
-            _, stderr = run_command(['git', 'clone', f'git@github.com:{path}.git'], "") # Checking git feedback
+            print(f"->> Processing git clone <{name}>...")
+            success, _, stderr = run_command(['git', 'clone', f'git@github.com:{path}.git', self.package_root / name], "") # Checking git feedback
 
             if "already exists" in stderr:
                 print("--- Reop dir already exists, use 'git pull origin master/main' instead.\n")
                 continue
+
+            if not success:
+                all_success = False
+
+            # Auto install repo requirements, if exists.
+            dep_success = self.install_dependencies(name)
+            if not dep_success:
+                all_success = False
+
+        return all_success
+
+
+    def install_dependencies(self, repo_name):
+        repo_path = self.package_root / repo_name
+        print(f"->> Looking for dependencies list in <{repo_path}>...")
+
+        dependencies = [
+            {
+                'name': 'Python',
+                'flag': 'requirements.txt',
+                'command': [self.venv_python, '-m', 'pip', 'install', '-r', 'requirements.txt']
+            },
+            {
+                'name': 'JavaScript',
+                'flag': 'package.json',
+                'command': ['npm', 'install']
+            },
+        ]
+
+        all_success = True
+        for dep in dependencies:
+            flag_file = repo_path / dep['flag']
+            if flag_file.exists():
+                print(f"--> Installing {dep['name']} dependencies...")
+                success, _, _ = run_command(dep['command'], "", cwd=repo_path)
+                if not success:
+                    all_success = False
+            
+        return all_success
 
 
     # Checking ssh connection to github; 
@@ -85,7 +166,7 @@ Type your choice here: """))
     def check_ssh_connection(self):
         print("--> Checking ssh git@github.com connection")
 
-        _, stderr = run_command(['ssh', '-T', 'git@github.com'], "", input='yes\n')
+        _, _, stderr = run_command(['ssh', '-o', 'StrictHostKeyChecking=no', '-T', 'git@github.com'], "")
         if "successfully authenticated" in stderr:
             return True
         else:
@@ -111,6 +192,7 @@ Input Github private key content below: (press Enter to finish):
 
         self.key_path.write_text(key_content)
         self.apply_ssh_config()
+
 
     # Adding new Host part to key config, or replace an exsit 'Host github.com' config part.
     def apply_ssh_config(self):

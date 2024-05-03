@@ -5,7 +5,6 @@ import subprocess
 from pathlib import Path
 
 
-
 def load_env(base_dir):
     # Load local .env manually, as python-dotenv needs to be installed into a venv, which not right now.
     print("->> Loading .env to sys env, manually...")
@@ -24,10 +23,10 @@ def load_env(base_dir):
     print("--- .env loaded to  sys environ.")
 
 
-def run_command(command, error_message, input=None):
+def run_command(command, error_message, cwd=None):
     printout = os.getenv('CMD_DETAIL_OUTPUT', 'show') == 'show'
-    try:       
-        process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=os.environ)
+    try:
+        process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd=cwd, env=os.environ)
 
         stdout_content = []
         stderr_content = []
@@ -54,7 +53,7 @@ def run_command(command, error_message, input=None):
             if process.poll() is not None:
                 break
 
-        stdout, stderr = process.communicate(input=input)
+        stdout, stderr = process.communicate()
         if stdout:
             stdout_content.append(stdout.strip())
         if stderr:
@@ -64,9 +63,9 @@ def run_command(command, error_message, input=None):
         if process.returncode != 0:
             if printout:
                 print("-- E1:", error_message)
-            return '\n'.join(stdout_content), '\n'.join(stderr_content)
+            return False, '\n'.join(stdout_content), '\n'.join(stderr_content)
 
-        return '\n'.join(stdout_content), '\n'.join(stderr_content)
+        return True, '\n'.join(stdout_content), '\n'.join(stderr_content)
 
     except Exception as e:
         if printout:
@@ -74,18 +73,19 @@ def run_command(command, error_message, input=None):
         sys.exit(1)
 
 
-
 class Utility():
-    def __init__(self, server_mapping, package_mapping, xray_mapping, github_repos) -> None:
+    def __init__(self, supported_platform, server_mapping, package_mapping, xray_mapping, github_repos) -> None:
+        self.supported_platform = supported_platform
         self.server_mapping = server_mapping
         self.package_mapping = package_mapping
         self.xray_mapping = xray_mapping
         self.github_repos = github_repos
 
 
-    def get_input_variable(self):
+    def get_input_variable(self, setup_git_clone):
         # Continue looping until exiting manually, or an unexpected error occurs. 
         # SERVER hostname variable, use to check and setup server domains, xray configs, acme keys, ddns keys.
+        platform = self.get_platform()
 
         # Set sys env to control run command output mode.
         confirm = self.prompt_confirmation("------------------------------\nShow script command detail?", True)
@@ -144,39 +144,9 @@ class Utility():
             except ValueError:
                 print("Invalid input: please enter a number.")
 
-        selected_repos = []
-        while True:
-            print("\n------------------------------\nGithub repo list: ")
-            for index, repo in enumerate(self.github_repos):
-                print(f"{index + 1}: {repo['name']}")
+        selected_repos = setup_git_clone.select_repos()
 
-            try:
-                repo_choice = int(input("------------------------------\nChoose a repo to clone list (0 to exit): "))
-                if repo_choice == 0:
-                    break
-                elif 1 <= repo_choice <= len(self.github_repos):
-                    repo = self.github_repos[repo_choice -1]
-                    name = repo['name']
-                    if repo_choice -1 in selected_repos:
-                        print(f"--- repo <{name}> already in the list.")
-                        continue
-                    selected_repos.append(repo_choice -1)
-                    print(f"--- repo <{name}> added to git clone list...\n")
-                    print(selected_repos) # test
-
-                    print("------------------------------\nCurrent git clone list: ")
-                    for i in selected_repos:
-                        repo = self.github_repos[i]
-                        name = repo['name']
-                        print(f"--- {name}")
-                    continue
-
-                else:
-                    print("Invalid repo id")
-            except ValueError:
-                print("Invalid input: please enter a number.")
-
-        return server, domains, package_choice, xray_choice, selected_repos
+        return platform, server, domains, package_choice, xray_choice, selected_repos
 
 
     def prompt_confirmation(self, prompt, default=False):
@@ -216,14 +186,17 @@ class Utility():
 
     def get_platform(self):
         try:
-            with Path('/etc/os-release').read_text() as f:
-                lines = f.readlines()
-                info = {line.split('=')[0]: line.split('=')[1].strip().replace('"', '') for line in lines}
-            if 'debian' in info.get('ID', '').lower():
-                return 'debian'
-            elif 'ubuntu' in info.get('ID', '').lower():
-                return 'ubuntu'
-            else:
-                return None
+            text = Path('/etc/os-release').read_text()
+            lines = text.splitlines()
+            info = {line.split('=')[0]: line.split('=')[1].strip().replace('"', '') for line in lines}
+            platform_id = info.get('ID', '').lower()
+
+            for platform in self.supported_platform:
+                if platform.lower() in platform_id:
+                    return platform
+            print(f"Unsupported platform {platform_id}, add platform to supported list and test.")
+            sys.exit(1)
+
         except FileNotFoundError:
-            return None
+            print(f"Unrecognized platform, exit.")
+            sys.exit(1)

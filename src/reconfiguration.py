@@ -39,12 +39,14 @@ class UpdateConfig:
         stdout = subprocess.check_output(['sudo', 'sysctl', '-p']).decode()
         if all(line in stdout for line in config_lines):
             print("--- BBR is already enabled")
-            return
+            return True
         
         with Path('/etc/sysctl.conf').open('a', encoding='utf-8') as f:
             f.writelines(config_lines)
         run_command(['sudo', 'sysctl', '-p'], "Failed to reload sysctl configuration")
         print("--- BBR enabled and sysctl reloaded")
+
+        return True
 
 
     def update_php_config(self): # for small vps
@@ -92,6 +94,8 @@ class UpdateConfig:
             config_path.write_text('\n'.join(new_content) + '\n')
             print(f"--- {config_path} updated.")
 
+        return True
+
 
     def create_vimrc(self):
         print("->> Creating .vimrc config...")
@@ -105,10 +109,15 @@ syntax on
 colorscheme default
 au BufRead,BufNewFile *.conf set syntax=sh
 """
-        vimrc_path = Path('~/.vimrc').expanduser()
-        with vimrc_path.open('a', encoding='utf-8') as f:
-            f.write(f"\n{vimrc}\n")
-        print(f"--- vim config insert into {vimrc_path}.")
+        try:
+            vimrc_path = Path('~/.vimrc').expanduser()
+            with vimrc_path.open('a', encoding='utf-8') as f:
+                f.write(f"\n{vimrc}\n")
+            print(f"--- vim config insert into {vimrc_path}.")
+            return True
+        except Exception as e:
+            print(e)
+            return False
 
 
     def move_addons(self):
@@ -128,6 +137,8 @@ au BufRead,BufNewFile *.conf set syntax=sh
         os.chmod(target_path, 0o755)
         os.chmod(target_env, 0o600)
 
+        return True
+
 
     def replace_config(self):
         print("->> Replacing nginx & xray config...")
@@ -145,6 +156,8 @@ au BufRead,BufNewFile *.conf set syntax=sh
 
         self.update_config("nginx", self.package_choice, nginx_target_path)
         self.update_config("xray", self.xray_choice, xray_target_path)
+
+        return True
 
 
     def update_config(self, type, choice, target_path):

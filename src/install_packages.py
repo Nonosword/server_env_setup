@@ -5,33 +5,37 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from src.utility import run_command
+from src.install_components import InstallSysComponents
 
-
+# TODO separate package requirement installation from 'install_components' to each package;
+# TODO for python package, create custom venv, and install requirement.txt
 class InstallPackages:
-    def __init__(self, package_choice, utility):
-        self.package_choice = package_choice
+    def __init__(self, utility, package_choice):
         self.utility = utility
+        self.package_choice = package_choice
 
-        self.wwwroot_path = Path('/home/wwwroot')
-        self.wwwroot_path.mkdir(parents=True, exist_ok=True)
+        self.wwwroot = Path('/home/wwwroot')
+        self.wwwroot.mkdir(parents=True, exist_ok=True)
 
-        self.nextcloud_url = 'https://download.nextcloud.com/server/releases/latest.zip'
-        self.wordpress_url = 'https://wordpress.org/latest.zip'
+        nextcloud_url = 'https://download.nextcloud.com/server/releases/latest.zip'
+        wordpress_url = 'https://wordpress.org/latest.zip'
 
+        php_requires = ['php-fpm', 'php-xml', 'php-mbstring', 'php-gd', 'php-curl', 'php-zip', 'php-mysql']
         # the different package combination and nginx config is defined here.
+        
         self.package_functions = {
             1: [
                 ('xray_core', self.install_xray_core, []),
-                ('nextcloud', self.wget_wwwroot_package, ['nextcloud', self.nextcloud_url])
+                ('nextcloud', self.install_wget_package, ['nextcloud', nextcloud_url, self.wwwroot, php_requires])
             ],
             2: [
                 ('xray_core', self.install_xray_core, []),
-                ('nextcloud', self.wget_wwwroot_package, ['nextcloud', self.nextcloud_url]),
-                ('chatgpt_web', self.install_chatgpt_web, [self.utility])
+                ('nextcloud', self.install_wget_package, ['nextcloud', nextcloud_url, self.wwwroot, php_requires]),
+                ('chatgpt_web', self.install_chatgpt_web, [])
             ],
             3: [
                 ('xray_core', self.install_xray_core, []),
-                ('wordpress', self.wget_wwwroot_package, ['wordpress', self.wordpress_url])
+                ('wordpress', self.install_wget_package, ['wordpress', wordpress_url, self.wwwroot, php_requires])
             ]
         }
 
@@ -42,8 +46,8 @@ class InstallPackages:
         for key, func, args in package_setup:
             results[key] = func(*args)
         
-        shutil.chown(self.wwwroot_path, user='www-data', group='www-data')
-        os.chmod(self.wwwroot_path, 0o755)
+        shutil.chown(self.wwwroot, user='www-data', group='www-data')
+        os.chmod(self.wwwroot, 0o755)
         return results
 
 
@@ -54,27 +58,34 @@ class InstallPackages:
         command = [f'bash -c "$(curl -L {script_url})" @ install -u root']
         subprocess.run(command, check=True, text=True, shell=True)
 
+        return True
+
 
     # this can be used for any package installed using the wget unpack method.
-    def wget_wwwroot_package(self, package, url):
+    def install_wget_package(self, package, url, path, apt_requires):
         print(f"->> Installing {package} from {url}")
 
         filename = urlparse(url).path.split('/')[-1]
-        file_path = self.wwwroot_path / filename
+        file_path = path / filename
         os.unlink(file_path) if os.path.isfile(file_path) else None  # fail safe
 
         print(f"--> Downloading {package} {filename}...")
-        run_command(['wget', url, '-P', self.wwwroot_path], f"Failed to download {package}")
+        run_command(['wget', '-nv', url, '-P', path], f"Failed to download {package}")
         print(f"--> Unzipping {package} {filename}...")
-        run_command(['unzip', '-n', file_path, '-d', self.wwwroot_path], f"Failed to unzip {package} file")
-        # Attention! This will overwrite existing files, otherwise use '-n' instead of '-o'.
+        run_command(['unzip', '-n', '-q', file_path, '-d', path], f"Failed to unzip {package} file")
+        # Attention! This will not overwrite existing files, otherwise use '-o' instead of '-n'.
+
         print(f"--> Removing {package} {filename}...")
         os.unlink(file_path)
-        
+
+        success = InstallSysComponents.apt_install_requirements(apt_requires)
+
         if package == 'nextcloud':
             print(f"--- Creating nextcloud data dir...")
-            nextcloud_data_path = self.wwwroot_path / 'nextcloud' / 'data'
+            nextcloud_data_path = path / 'nextcloud' / 'data'
             nextcloud_data_path.mkdir(parents=True, exist_ok=True)
+
+        return True
 
 
     # Source Repo: https://github.com/ChatGPTNextWeb/ChatGPT-Next-Web.
@@ -88,10 +99,9 @@ class InstallPackages:
         passcode = os.getenv('WEBCHAT_PASSCODE')
         print(f"->> Installing docker {image_name}...")
 
-        stdout, _ = run_command(['sudo', 'docker', 'ps', '-q', '--filter', f"ancestor={image_name}"], "Unable to check docker process list")
+        _, stdout, _ = run_command(['sudo', 'docker', 'ps', '-q', '--filter', f"ancestor={image_name}"], "Unable to check docker process list")
         if stdout:
             print(f"--- {image_name} is already running.")
-            return
         else:
             # Remember to set your key to sys env or .env.
             commands = [
@@ -101,6 +111,8 @@ class InstallPackages:
             for cmd in commands:
                 run_command(cmd, f"Failed to run {' '.join(cmd)}")
 
+        return True
+
 
     # Remember to set your keys to sys env or .env file.
     def install_docker(self):
@@ -108,9 +120,9 @@ class InstallPackages:
 
         gpg_path = '/usr/share/keyrings/docker-archive-keyring.gpg'
         platform = self.utility.get_platform()
-        if platform == 'debian':
+        if platform == 'Debian':
             docker_package = 'https://download.docker.com/linux/debian'
-        elif platform == 'ubuntu':
+        elif platform == 'Ubuntu':
             docker_package = 'https://download.docker.com/linux/ubuntu'
         else:
             print("Platform not supported")
@@ -124,14 +136,21 @@ class InstallPackages:
         subprocess.run(['sudo', 'gpg', '--dearmor', '-o', gpg_path], input=curl_output, check=True)
 
         print("--> Adding docker dpkg sources...")
-        architecture, _ = run_command(['sudo', 'dpkg', '--print-architecture'], "Failed to run dpkg --print-architecture")
-        release, _ = run_command(['sudo', 'lsb_release', '-cs'], "Failed to run lsb_release -cs")
+        _, architecture, _ = run_command(['sudo', 'dpkg', '--print-architecture'], "Failed to run dpkg --print-architecture")
+        _, release, _ = run_command(['sudo', 'lsb_release', '-cs'], "Failed to run lsb_release -cs")
         docker_list_content = f"deb [arch={architecture.strip()} signed-by={gpg_path}] {docker_package} {release.strip()} stable"
         Path('/etc/apt/sources.list.d/docker.list').write_text(docker_list_content)
 
         print("--> Installing docker CE using apt-get...")
-        run_command(['sudo', 'apt-get', 'update', '-y'], "Failed to update package index.")
-        run_command(['sudo', 'apt-get', 'install', '-y', 'docker-ce', 'docker-ce-cli', 'containerd.io'], "Failed to install Docker Engine.")
+        docker_commands = [
+            ['sudo', 'apt-get', 'update', '-y'],
+            ['sudo', 'apt-get', 'install', '-y', 'docker-ce', 'docker-ce-cli', 'containerd.io']
+        ]
+        all_success = True
+        for cmd in docker_commands:
+            success, _, _ = run_command(cmd, f"Failed to run {' '.join(cmd)}")
+            if not success:
+                all_success = False
+                continue
 
-        return True
-
+        return all_success

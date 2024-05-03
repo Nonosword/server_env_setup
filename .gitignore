@@ -3,9 +3,17 @@
 
 # Distribution / packaging
 .Python
-test/
+
+# Test 
+**/__________test/
+**/*.bak
+
+# Local Databases
+**/.DS_Store
+**/__________database
 
 # Service ENV
 **/.env
-**/github_key
-**/*.bak
+**/authencation.ini
+**/__________keys
+

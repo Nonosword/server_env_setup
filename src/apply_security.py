@@ -31,13 +31,16 @@ class SafetyPractices:
     def apply_authorized_keys(self):
         print("->> Sending ssh pubkey to 'authorized_keys'")
 
-        with self.authorized_keys.open('a', encoding='utf-8') as f:
-            f.write(f"\n{self.ssh_pub_key}\n")
+        try:
+            with self.authorized_keys.open('a', encoding='utf-8') as f:
+                f.write(f"\n{self.ssh_pub_key}\n")
 
-        os.chmod(self.ssh_path, 0o700)
-        os.chmod(self.authorized_keys, 0o600)
-
-        return True        
+            os.chmod(self.ssh_path, 0o700)
+            os.chmod(self.authorized_keys, 0o600)
+            return True        
+        except Exception as e:
+            print(e)
+            return False
 
 
     # As you can see, replace PORT to your own like, and force enable PUBKEY ONLY mode.
@@ -68,12 +71,12 @@ class SafetyPractices:
         # Generally speaking, the impact will take effect on the new ssh connection.
         confirm = self.utility.prompt_confirmation("------------------------------\nRestart sshd service now?")
         if confirm:
-            run_command(['sudo', 'service', 'sshd', 'restart'], "Failed to restart sshd service")
+            success, _, _, = run_command(['sudo', 'service', 'sshd', 'restart'], "Failed to restart sshd service")
             print("--- sshd service restarted...")
+            return True if success else False
         else:
             print("--- Skipping for now.")
-
-        return True
+            return None
 
 
     # Enable UFW, and adding 80 443, and your new ssh port.
@@ -88,7 +91,11 @@ class SafetyPractices:
             ['sudo', 'ufw', 'allow', '22/tcp'],
             ['sudo', 'ufw', '--force', 'enable']
         ]
+        all_success = True
         for cmd in ufw_commands:
-            run_command(cmd, f"Failed to run {' '.join(cmd)}")
+            success, _, _ = run_command(cmd, f"Failed to run {' '.join(cmd)}")
+            if not success:
+                all_success = False
+                continue
 
-        return True
+        return all_success

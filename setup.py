@@ -23,45 +23,61 @@ xray_mapping = {
 }
 
 
-if __name__ == '__main__':
-    supported_platform = ['Debian', 'Ubuntu']
-    BASE_DIR = Path(__file__).resolve().parent
-    load_env(BASE_DIR)
+def initialize_paths():
+    # define some common used path
     package_root = Path('~/').expanduser()
     venv_path = package_root / 'appvenv'
     venv_python = venv_path / 'bin' / 'python'
+
+    return package_root, venv_path, venv_python
+
+
+def read_sysparameters():
+    # read basic parameters from sys env, for Utility setup.
+    supported_platform = ['Debian', 'Ubuntu']
 
     server_mapping = os.getenv('SERVER_MAPPING')
     server_mapping = json.loads(server_mapping)
     github_repos = os.getenv('GITHUB_REPOS')
     github_repos = json.loads(github_repos)
 
-
-    setup_git_clone = SetupSSHGithub(package_root, github_repos, venv_python)
-    
-    utility = Utility(supported_platform, server_mapping, package_mapping, xray_mapping, github_repos)
-    platform, server, domains, package_choice, xray_choice, selected_repos = utility.get_input_variable(setup_git_clone)
-
-    print(">>> Secure system environment...")
-    security_practices = SafetyPractices(server, utility)
-    security_result = security_practices.start_functions()
-
-    print(">>> Starting system dependency installation...")
-    install_sys_comps = InstallSysComponents(package_root, venv_path, domains)
-    syscomponents_result = install_sys_comps.start_functions()
-
-    print(">>> Installing selected packages...")
-    install_packages = InstallPackages(utility, package_choice)
-    packages_result = install_packages.start_functions()
-
-    print(">>> Setup Git@Github SSH Connection")
-    gitclone_result = setup_git_clone.start_functions()
-
     _, php_v, _ = run_command(['php', '-v'], "Failed to run print php version.")
     php_v = ".".join(php_v.split()[1].split('.')[:2])
 
+    return supported_platform, server_mapping, github_repos, php_v
+
+
+def initialize_classes(base_dir):
+    # Instantiate all classes, pass basic parameters to them
+    package_root, venv_path, venv_python = initialize_paths()
+    supported_platform, server_mapping, github_repos, php_v = read_sysparameters()
+
+    setup_git_clone = SetupSSHGithub(package_root, github_repos, venv_python)
+    utility = Utility(supported_platform, server_mapping, package_mapping, xray_mapping, github_repos)
+    platform, server, domains, package_choice, xray_choice = utility.get_input_variable(setup_git_clone)
+    security_practices = SafetyPractices(server, utility)
+    install_sys_comps = InstallSysComponents(package_root, venv_path, domains)
+    install_packages = InstallPackages(platform, package_choice)
+    update_configs = UpdateConfig(base_dir, package_choice, xray_choice, server, domains, php_v)
+
+    return setup_git_clone, security_practices, install_sys_comps, install_packages, update_configs, php_v
+
+
+if __name__ == '__main__':
+    BASE_DIR = Path(__file__).resolve().parent
+    load_env(BASE_DIR)
+
+    setup_git_clone, security_practices, install_sys_comps, install_packages, update_configs, php_v = initialize_classes(BASE_DIR)
+
+    print(">>> Secure system environment...")
+    security_result = security_practices.start_functions()
+    print(">>> Starting system dependency installation...")
+    syscomponents_result = install_sys_comps.start_functions()
+    print(">>> Installing selected packages...")
+    packages_result = install_packages.start_functions()
+    print(">>> Setup Git@Github SSH Connection")
+    gitclone_result = setup_git_clone.start_functions()
     print(">>> Updating configs...")
-    update_configs = UpdateConfig(BASE_DIR, package_choice, xray_choice, server, domains, php_v)
     reconfiguration_result = update_configs.start_functions()
 
     # print(">>> Setting up Mysql...")

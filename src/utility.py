@@ -146,7 +146,7 @@ class Utility():
 
         selected_repos = setup_git_clone.select_repos()
 
-        return platform, server, domains, package_choice, xray_choice, selected_repos
+        return platform, server, domains, package_choice, xray_choice
 
 
     def prompt_confirmation(self, prompt, default=False):

@@ -10,8 +10,8 @@ from src.install_components import InstallSysComponents
 # TODO separate package requirement installation from 'install_components' to each package;
 # TODO for python package, create custom venv, and install requirement.txt
 class InstallPackages:
-    def __init__(self, utility, package_choice):
-        self.utility = utility
+    def __init__(self, platform, package_choice):
+        self.platform = platform
         self.package_choice = package_choice
 
         self.wwwroot = Path('/home/wwwroot')
@@ -119,16 +119,15 @@ class InstallPackages:
         print("->> Installing docker CE...")
 
         gpg_path = '/usr/share/keyrings/docker-archive-keyring.gpg'
-        platform = self.utility.get_platform()
-        if platform == 'Debian':
+        if self.platform == 'Debian':
             docker_package = 'https://download.docker.com/linux/debian'
-        elif platform == 'Ubuntu':
+        elif self.platform == 'Ubuntu':
             docker_package = 'https://download.docker.com/linux/ubuntu'
         else:
             print("Platform not supported")
             return False
 
-        print(f"--> Installing docker requirements -> {platform}...")
+        print(f"--> Installing docker requirements -> {self.platform}...")
         run_command(['sudo', 'apt-get', 'install', '-y', 'apt-transport-https', 'ca-certificates', 'gnupg', 'lsb-release'], "Failed to install prerequisites.")
 
         print("--> Installing docker GPG KEY...")

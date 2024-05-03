@@ -88,20 +88,20 @@ class InstallSysComponents:
         for cmd in commands:
             run_command(cmd, f"Failed to run {' '.join(cmd)}")
 
-        # for domain in self.domains:
-        # # This could take a while, be patient.
-        # # Issue certs and install them to their own path for each domain under the server you selected.
-        #     print(f"--> Issuing certificates for {domain}...")
+        for domain in self.domains:
+        # This could take a while, be patient.
+        # Issue certs and install them to their own path for each domain under the server you selected.
+            print(f"--> Issuing certificates for {domain}...")
             
-        #     os.environ['CF_Zone_ID'] = os.getenv(f'CF_Zone_ID_{domain}')
-        #     cert_path = Path('/usr/local/nginx/conf/ssl/') / domain
-        #     cert_path.mkdir(parents=True, exist_ok=True)
+            os.environ['CF_Zone_ID'] = os.getenv(f'CF_Zone_ID_{domain}')
+            cert_path = Path('/usr/local/nginx/conf/ssl/') / domain
+            cert_path.mkdir(parents=True, exist_ok=True)
 
-        #     commands = [
-        #         [f'{self.package_root}/.acme.sh/acme.sh', '--issue', '--force', '--dns', 'dns_cf', '-d', domain, '-d', f'*.{domain}'],
-        #         [f'{self.package_root}/.acme.sh/acme.sh', '--install-cert', '-d', domain, '--key-file', f'{str(cert_path)}/{domain}.key', '--fullchain-file', f'{str(cert_path)}/fullchain.cer'],
-        #     ]
-        #     for cmd in commands:
-        #         run_command(cmd, f"Failed to run {' '.join(cmd)}")
+            commands = [
+                [f'{self.package_root}/.acme.sh/acme.sh', '--issue', '--force', '--dns', 'dns_cf', '-d', domain, '-d', f'*.{domain}'],
+                [f'{self.package_root}/.acme.sh/acme.sh', '--install-cert', '-d', domain, '--key-file', f'{str(cert_path)}/{domain}.key', '--fullchain-file', f'{str(cert_path)}/fullchain.cer'],
+            ]
+            for cmd in commands:
+                run_command(cmd, f"Failed to run {' '.join(cmd)}")
 
         return True

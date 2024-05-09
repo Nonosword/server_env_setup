@@ -23,15 +23,15 @@ class InstallSysComponents:
 
 
     @staticmethod
-    def apt_install_requirements(packages=None):
+    def apt_install_requirements(apt_packages=None):
         # when called by other function, use 'packages' as a list, like ['curl', 'vim', 'git'].
         print("->> Installing apt-get environment requirements...")
 
-        if packages:
-            print("--> Installing custom apt packages...")
+        if apt_packages:
+            print(f"--> Installing custom apt packages: {apt_packages}...")
+            apt_packages_str = ' '.join(apt_packages)
 
-            package_str = ' '.join(packages)
-            success, _, _ = run_command(['sudo', 'apt-get', 'install', '-y', package_str], f"Failed to install {package_str}")
+            success, _, _ = run_command(['sudo', 'apt-get', 'install', '-y', apt_packages_str], f"Failed to install {apt_packages_str}")
             return True if success else False
 
 
@@ -46,9 +46,7 @@ class InstallSysComponents:
         all_success = True
         for cmd in apt_commands:
             success, _, _ = run_command(cmd, f"Failed to run {' '.join(cmd)}")
-            if not success:
-                all_success = False
-                continue
+            all_success = all_success and success
 
         return all_success
 
@@ -77,8 +75,7 @@ class InstallSysComponents:
         eab_kid = os.getenv('EAB_KID')
         eab_hmac_key = os.getenv('EAB_KEY')
 
-        acme_sh = subprocess.check_output(['curl', '-sSL', 'https://get.acme.sh']).decode('utf-8')
-        subprocess.run(['sh'], input=acme_sh, text=True)
+        subprocess.run(['curl https://get.acme.sh | sh -s'], shell=True, check=True, text=True)
 
         commands = [
             [f'{self.package_root}/.acme.sh/acme.sh', '--upgrade', '--auto-upgrade'],
@@ -87,6 +84,11 @@ class InstallSysComponents:
         ]
         for cmd in commands:
             run_command(cmd, f"Failed to run {' '.join(cmd)}")
+
+        acme_issue_on = os.getenv('ACME_ISSUE_CRETS')
+        if acme_issue_on != 'True':
+            print(f"--- Skipping issue certificates...")
+            return None
 
         for domain in self.domains:
         # This could take a while, be patient.

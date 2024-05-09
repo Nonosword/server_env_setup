@@ -88,7 +88,7 @@ class Utility():
         platform = self.get_platform()
 
         # Set sys env to control run command output mode.
-        confirm = self.prompt_confirmation("------------------------------\nShow script command detail?", True)
+        confirm = self.prompt_confirmation("------------------------------\nShow script command detail?", False)
         if confirm:
             os.environ['CMD_DETAIL_OUTPUT'] = 'show'
         else:
@@ -113,6 +113,14 @@ class Utility():
                 print("Invalid input: please enter a number.")
 
 
+        # Set acme cert issue switch env.
+        confirm = self.prompt_confirmation("------------------------------\nTry issue certs for this/those domain names?", True)
+        if confirm:
+            os.environ['ACME_ISSUE_CRETS'] = 'True'
+        else:
+            os.environ['ACME_ISSUE_CRETS'] = 'False'
+
+
         # Nginx config types, pre configured and easy to conbine and replace.
         while True:
             print("------------------------------\nSelect a Package with NGINX config type:")
@@ -127,6 +135,14 @@ class Utility():
                     print("Invalid choice, try again.")
             except ValueError:
                 print("Invalid input: please enter a number.")
+
+
+        # Set acme cert issue switch env.
+        confirm = self.prompt_confirmation("------------------------------\nAutomatically install included packages?", True)
+        if confirm:
+            os.environ['AUTO_INSTALL_PACKAGES'] = 'True'
+        else:
+            os.environ['AUTO_INSTALL_PACKAGES'] = 'False'
 
 
         # Xray-core configs, pre configured.

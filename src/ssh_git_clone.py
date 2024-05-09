@@ -85,13 +85,11 @@ class SetupSSHGithub():
                 print("--- Reop dir already exists, use 'git pull origin master/main' instead.\n")
                 continue
 
-            if not success:
-                all_success = False
+            all_success = all_success and success
 
             # Auto install repo requirements, if exists.
             dep_success = self.install_dependencies(name)
-            if not dep_success:
-                all_success = False
+            all_success = all_success and dep_success
 
         return all_success
 
@@ -101,6 +99,11 @@ class SetupSSHGithub():
         print(f"->> Looking for dependencies list in <{repo_path}>...")
 
         dependencies = [
+            {
+                'name': 'Python',
+                'flag': 'setup.py',
+                'command': [self.venv_python, 'setup.py']
+            },
             {
                 'name': 'Python',
                 'flag': 'requirements.txt',
@@ -119,8 +122,7 @@ class SetupSSHGithub():
             if flag_file.exists():
                 print(f"--> Installing {dep['name']} dependencies...")
                 success, _, _ = run_command(dep['command'], "", cwd=repo_path)
-                if not success:
-                    all_success = False
+                all_success = all_success and success
             
         return all_success
 

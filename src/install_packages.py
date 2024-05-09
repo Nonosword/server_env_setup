@@ -41,13 +41,26 @@ class InstallPackages:
 
 
     def start_functions(self):
+        skip_package_install = os.getenv('AUTO_INSTALL_PACKAGES')
+        if skip_package_install != 'True':
+            print(f"--- Skipping package installation...")
+            return None
+
         package_setup = self.package_functions.get(self.package_choice, [])
         results = {}
         for key, func, args in package_setup:
             results[key] = func(*args)
-        
+        #
         shutil.chown(self.wwwroot, user='www-data', group='www-data')
         os.chmod(self.wwwroot, 0o755)
+
+        for item in self.wwwroot.rglob('*'):
+            shutil.chown(item, user='www-data', group='www-data')
+            item.chmod(0o755)
+
+
+
+
         return results
 
 
@@ -62,27 +75,32 @@ class InstallPackages:
 
 
     # this can be used for any package installed using the wget unpack method.
-    def install_wget_package(self, package, url, path, apt_requires):
+    def install_wget_package(self, package, url, target_path, apt_requires):
         print(f"->> Installing {package} from {url}")
 
-        filename = urlparse(url).path.split('/')[-1]
-        file_path = path / filename
-        os.unlink(file_path) if os.path.isfile(file_path) else None  # fail safe
+        parsed_url = Path(urlparse(url).path)
+        filename = parsed_url.name
+        ext = parsed_url.suffix[1:]
+        file_path = target_path / filename
+
+        file_path.unlink() if file_path.is_file() else None  # fail safe
 
         print(f"--> Downloading {package} {filename}...")
-        run_command(['wget', '-nv', url, '-P', path], f"Failed to download {package}")
-        print(f"--> Unzipping {package} {filename}...")
-        run_command(['unzip', '-n', '-q', file_path, '-d', path], f"Failed to unzip {package} file")
-        # Attention! This will not overwrite existing files, otherwise use '-o' instead of '-n'.
+        run_command(['wget', '-nv', url, '-P', target_path], f"Failed to download {package}")
 
-        print(f"--> Removing {package} {filename}...")
-        os.unlink(file_path)
+        if ext == 'zip':
+            print(f"--> Unzipping {package} {filename}...")
+            run_command(['unzip', '-n', '-q', file_path, '-d', target_path], f"Failed to unzip {package} file")
+            # Attention! This will not overwrite existing files, otherwise use '-o' instead of '-n'.
+
+            print(f"--> Removing {package} {filename}...")
+            file_path.unlink()
 
         success = InstallSysComponents.apt_install_requirements(apt_requires)
 
         if package == 'nextcloud':
             print(f"--- Creating nextcloud data dir...")
-            nextcloud_data_path = path / 'nextcloud' / 'data'
+            nextcloud_data_path = target_path / 'nextcloud' / 'data'
             nextcloud_data_path.mkdir(parents=True, exist_ok=True)
 
         return True
@@ -148,8 +166,6 @@ class InstallPackages:
         all_success = True
         for cmd in docker_commands:
             success, _, _ = run_command(cmd, f"Failed to run {' '.join(cmd)}")
-            if not success:
-                all_success = False
-                continue
+            all_success = all_success and success
 
         return all_success

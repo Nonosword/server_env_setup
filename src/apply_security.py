@@ -94,8 +94,6 @@ class SafetyPractices:
         all_success = True
         for cmd in ufw_commands:
             success, _, _ = run_command(cmd, f"Failed to run {' '.join(cmd)}")
-            if not success:
-                all_success = False
-                continue
+            all_success = all_success and success
 
         return all_success

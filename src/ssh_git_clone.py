@@ -76,10 +76,11 @@ class SetupSSHGithub():
         for repo in self.selected_repos:
             repo = self.github_repos[repo]
             name = repo['name']
-            path = repo['path']
+            git_path = repo['git_path']
+            pkg_path = Path(repo['pkg_path']) # with pkg name in the path
 
             print(f"->> Processing git clone <{name}>...")
-            success, _, stderr = run_command(['git', 'clone', f'git@github.com:{path}.git', self.package_root / name], "") # Checking git feedback
+            success, _, stderr = run_command(['git', 'clone', f'git@github.com:{git_path}.git', pkg_path], "") # Checking git feedback
 
             if "already exists" in stderr:
                 print("--- Reop dir already exists, use 'git pull origin master/main' instead.\n")
@@ -88,15 +89,14 @@ class SetupSSHGithub():
             all_success = all_success and success
 
             # Auto install repo requirements, if exists.
-            dep_success = self.install_dependencies(name)
+            dep_success = self.install_dependencies(pkg_path)
             all_success = all_success and dep_success
 
         return all_success
 
 
-    def install_dependencies(self, repo_name):
-        repo_path = self.package_root / repo_name
-        print(f"->> Looking for dependencies list in <{repo_path}>...")
+    def install_dependencies(self, pkg_path):
+        print(f"->> Looking for dependencies list in <{pkg_path}>...")
 
         dependencies = [
             {
@@ -118,10 +118,10 @@ class SetupSSHGithub():
 
         all_success = True
         for dep in dependencies:
-            flag_file = repo_path / dep['flag']
+            flag_file = pkg_path / dep['flag']
             if flag_file.exists():
                 print(f"--> Installing {dep['name']} dependencies...")
-                success, _, _ = run_command(dep['command'], "", cwd=repo_path)
+                success, _, _ = run_command(dep['command'], "", cwd=pkg_path)
                 all_success = all_success and success
             
         return all_success

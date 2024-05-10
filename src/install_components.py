@@ -34,7 +34,6 @@ class InstallSysComponents:
             success, _, _ = run_command(['sudo', 'apt-get', 'install', '-y', apt_packages_str], f"Failed to install {apt_packages_str}")
             return True if success else False
 
-
         # Interrupting the apt-get process may cause corruption of the dpkg database. If necessary, run "sudo dpkg --configure -a" to repair it.
         apt_commands = [
             ['sudo', 'apt-get', 'clean', 'all'],

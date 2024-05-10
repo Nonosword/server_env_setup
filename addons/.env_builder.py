@@ -72,17 +72,20 @@ config = {
     "GITHUB_REPOS": [
         {
             "name": "server_env_setup", 
-            "path": "Nonosword/server_env_setup",
+            "git_path": "Nonosword/server_env_setup",
+            "pkg_path": "/ubuntu/server_env_setup",
             "type": "public"
         }, 
         {
             "name": "server_env_setup", 
-            "path": "Nonosword/server_env_setup",
+            "git_path": "Nonosword/server_env_setup",
+            "pkg_path": "/ubuntu/server_env_setup",
             "type": "public"
         }, 
         {
             "name": "server_env_setup", 
-            "path": "Nonosword/server_env_setup",
+            "git_path": "Nonosword/server_env_setup",
+            "pkg_path": "/ubuntu/server_env_setup",
             "type": "public"
         }
     ],

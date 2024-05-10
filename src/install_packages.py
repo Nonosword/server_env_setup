@@ -50,17 +50,14 @@ class InstallPackages:
         results = {}
         for key, func, args in package_setup:
             results[key] = func(*args)
-        #
-        shutil.chown(self.wwwroot, user='www-data', group='www-data')
-        os.chmod(self.wwwroot, 0o755)
 
-        for item in self.wwwroot.rglob('*'):
-            shutil.chown(item, user='www-data', group='www-data')
-            item.chmod(0o755)
-
-
-
-
+        print("->> Setting up wwwroot permissions...")
+        perimission_commands = [
+            ['sudo', 'chown', '-R', 'www-data', self.wwwroot],
+            ['sudo', 'chmod', '-R', '755', self.wwwroot]
+        ]
+        for command in perimission_commands:
+            run_command(command, "--- Failed to set permissions:")
         return results
 
 

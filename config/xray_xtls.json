@@ -49,6 +49,7 @@
         }
     ],
     "outbounds": [
+        // Warp outbound placeholder
         {
             "protocol": "freedom",
             "tag": "direct"
@@ -61,6 +62,7 @@
     "routing": {
         "domainStrategy": "IPIfNonMatch",
         "rules": [
+            // Warp rules placeholder
             {
                 "type": "field",
                 "domain": ["geosite:category-ads-all", "geosite:cn"],

@@ -1,79 +1,80 @@
 import os
-import sys
-import select
+import shlex
 import subprocess
+import sys
 from pathlib import Path
 
 
 def load_env(base_dir):
-    # Load local .env manually, as python-dotenv needs to be installed into a venv, which not right now.
-    print("->> Loading .env to sys env, manually...")
+    print('->> Loading .env to sys env, manually...')
 
     env_path = base_dir / '.env'
+    if not env_path.exists():
+        raise FileNotFoundError(f'Missing env file: {env_path}')
+
     env_lines = env_path.read_text(encoding='utf-8').splitlines()
-    for line in env_lines:
-        line = line.strip()
-        if line and not line.startswith('#'):
-            key, value = line.split('=', 1)
-            os.environ[key] = value.strip("'").strip('"')
+    for raw_line in env_lines:
+        line = raw_line.strip()
+        if not line or line.startswith('#') or '=' not in line:
+            continue
+        key, value = line.split('=', 1)
+        os.environ[key] = value.strip().strip("'").strip('"')
 
-    os.environ['DEBIAN_FRONTEND']='noninteractive'
-    os.environ['UBUNTU_FRONTEND']='noninteractive'
+    os.environ['DEBIAN_FRONTEND'] = 'noninteractive'
+    os.environ['UBUNTU_FRONTEND'] = 'noninteractive'
 
-    print("--- .env loaded to  sys environ.")
+    print('--- .env loaded to sys environ.')
+
+
+def env_flag(name, default=False):
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {'1', 'true', 'yes', 'y', 'on'}
 
 
 def run_command(command, error_message, cwd=None):
-    printout = os.getenv('CMD_DETAIL_OUTPUT', 'show') == 'show'
+    printout = env_flag('CMD_DETAIL_OUTPUT', True)
     try:
-        process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd=cwd, env=os.environ)
-
-        stdout_content = []
-        stderr_content = []
-        # Set the stdout and stderr output streams as-is
-        while True:
-            reads = [process.stdout.fileno(), process.stderr.fileno()]
-            ret = select.select(reads, [], [])
-
-            for fd in ret[0]:
-                if fd == process.stdout.fileno():
-                    read = process.stdout.readline()
-                    if read:
-                        stdout_content.append(read.strip())
-                        if printout and "(Reading database" not in read and "Selecting previously unselected package" not in read and "Preparing to unpack" not in read and "Unpacking" not in read and "inflating:" not in read:
-                            print(read.strip())
-                elif fd == process.stderr.fileno():
-                    read = process.stderr.readline()
-                    if read:
-                        stderr_content.append(read.strip())
-                        if printout:
-                            print(read.strip())
-
-            # Check whether the caller's process has ended. different between 'Popen' and 'run'
-            if process.poll() is not None:
-                break
-
-        stdout, stderr = process.communicate()
-        if stdout:
-            stdout_content.append(stdout.strip())
-        if stderr:
-            stderr_content.append(stderr.strip())
-
-        # Return the stdout and stderr feedback to caller:
-        if process.returncode != 0:
-            if printout:
-                print("-- E1:", error_message)
-            return False, '\n'.join(stdout_content), '\n'.join(stderr_content)
-
-        return True, '\n'.join(stdout_content), '\n'.join(stderr_content)
-
-    except Exception as e:
+        process = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            cwd=cwd,
+            env=os.environ,
+        )
+    except Exception as exc:
         if printout:
-            print("-- E2:", str(e))
+            print('-- E2:', str(exc))
         sys.exit(1)
 
+    stdout = process.stdout.strip()
+    stderr = process.stderr.strip()
 
-class Utility():
+    if printout:
+        for stream_output in (stdout, stderr):
+            if not stream_output:
+                continue
+            for line in stream_output.splitlines():
+                if any(token in line for token in (
+                    '(Reading database',
+                    'Selecting previously unselected package',
+                    'Preparing to unpack',
+                    'Unpacking',
+                    'inflating:',
+                )):
+                    continue
+                print(line)
+
+    if process.returncode != 0:
+        if printout:
+            print('-- E1:', error_message)
+        return False, stdout, stderr
+
+    return True, stdout, stderr
+
+
+class Utility:
     def __init__(self, supported_platform, server_mapping, package_mapping, xray_mapping, github_repos) -> None:
         self.supported_platform = supported_platform
         self.server_mapping = server_mapping
@@ -81,138 +82,103 @@ class Utility():
         self.xray_mapping = xray_mapping
         self.github_repos = github_repos
 
-
     def get_input_variable(self, setup_git_clone):
-        # Continue looping until exiting manually, or an unexpected error occurs. 
-        # SERVER hostname variable, use to check and setup server domains, xray configs, acme keys, ddns keys.
         platform = self.get_platform()
 
-        # Set sys env to control run command output mode.
-        confirm = self.prompt_confirmation("------------------------------\nShow script command detail?", False)
-        if confirm:
-            os.environ['CMD_DETAIL_OUTPUT'] = 'show'
-        else:
-            os.environ['CMD_DETAIL_OUTPUT'] = 'none'
-
+        confirm = self.prompt_confirmation('------------------------------\nShow script command detail?', False)
+        os.environ['CMD_DETAIL_OUTPUT'] = 'show' if confirm else 'none'
 
         while True:
-            print("------------------------------\nSelect a SERVER config pack:")
+            print('------------------------------\nSelect a SERVER config pack:')
             for index, server_pack in enumerate(self.server_mapping):
                 print(f"{index + 1}: {server_pack['name']} - {server_pack['domain']}")
             try:
-                server_choice = int(input("------------------------------\nSelect a server to continute: "))
-                if 0 <= server_choice -1 <= len(self.server_mapping):
-                    server_pack = self.server_mapping[server_choice -1]
+                server_choice = int(input('------------------------------\nSelect a server to continute: '))
+                if 1 <= server_choice <= len(self.server_mapping):
+                    server_pack = self.server_mapping[server_choice - 1]
                     server = server_pack['name']
                     domains = server_pack['domain']
-                    print(f"--- SERVER config pack selected: {server} - {domains}...")
+                    print(f'--- SERVER config pack selected: {server} - {domains}...')
                     break
-                else:
-                    print("Invalid choice, try again.")
+                print('Invalid choice, try again.')
             except ValueError:
-                print("Invalid input: please enter a number.")
+                print('Invalid input: please enter a number.')
 
+        os.environ['ACME_ISSUE_CRETS'] = 'True' if self.prompt_confirmation(
+            '------------------------------\nTry issue certs for this/those domain names?',
+            True,
+        ) else 'False'
 
-        # Set acme cert issue switch env.
-        confirm = self.prompt_confirmation("------------------------------\nTry issue certs for this/those domain names?", True)
-        if confirm:
-            os.environ['ACME_ISSUE_CRETS'] = 'True'
-        else:
-            os.environ['ACME_ISSUE_CRETS'] = 'False'
-
-
-        # Nginx config types, pre configured and easy to conbine and replace.
         while True:
-            print("------------------------------\nSelect a Package with NGINX config type:")
+            print('------------------------------\nSelect a Package with NGINX config type:')
             for key, value in self.package_mapping.items():
-                print(f"{key}: {value}")
+                print(f'{key}: {value}')
             try:
-                package_choice = int(input("------------------------------\nSelect a package to continute: "))
+                package_choice = int(input('------------------------------\nSelect a package to continute: '))
                 if package_choice in self.package_mapping:
-                    print(f"--- Package with NGINX selected: {self.package_mapping[package_choice]}...")
+                    print(f'--- Package with NGINX selected: {self.package_mapping[package_choice]}...')
                     break
-                else:
-                    print("Invalid choice, try again.")
+                print('Invalid choice, try again.')
             except ValueError:
-                print("Invalid input: please enter a number.")
+                print('Invalid input: please enter a number.')
 
+        os.environ['AUTO_INSTALL_PACKAGES'] = 'True' if self.prompt_confirmation(
+            '------------------------------\nAutomatically install included packages?',
+            True,
+        ) else 'False'
 
-        # Set acme cert issue switch env.
-        confirm = self.prompt_confirmation("------------------------------\nAutomatically install included packages?", True)
-        if confirm:
-            os.environ['AUTO_INSTALL_PACKAGES'] = 'True'
-        else:
-            os.environ['AUTO_INSTALL_PACKAGES'] = 'False'
-
-
-        # Xray-core configs, pre configured.
         while True:
-            print("------------------------------\nSelect XRAY config type:")
+            print('------------------------------\nSelect XRAY config type:')
             for key, value in self.xray_mapping.items():
-                print(f"{key}: {value}")
+                print(f'{key}: {value}')
             try:
-                xray_choice = int(input("------------------------------\nSelect XRAY config type to continute: "))
+                xray_choice = int(input('------------------------------\nSelect XRAY config type to continute: '))
                 if xray_choice in self.xray_mapping:
-                    print(f"--- XRAY config type selected: {self.xray_mapping[xray_choice]}...")
+                    print(f'--- XRAY config type selected: {self.xray_mapping[xray_choice]}...')
                     break
-                else:
-                    print("Invalid choice, try again.")
+                print('Invalid choice, try again.')
             except ValueError:
-                print("Invalid input: please enter a number.")
+                print('Invalid input: please enter a number.')
 
-        selected_repos = setup_git_clone.select_repos()
-
+        setup_git_clone.select_repos()
         return platform, server, domains, package_choice, xray_choice
 
-
     def prompt_confirmation(self, prompt, default=False):
-    # A confirmation "prompt" for double-checking high-risk actions.
-        valid_choices = {
-            'y': True,
-            'yes': True,
-            'n': False,
-            'no': False,
-        }
+        valid_choices = {'y': True, 'yes': True, 'n': False, 'no': False}
+        choice_str = '(Y/n)' if default else '(y/N)'
 
-        choice_str = ''
-        if default:
-            choice_str = '(Y/n)'
-        else:
-            choice_str = '(y/N)'
-
-        # Setting or not setting a default value results in different default actions.
         while True:
-            value = input(f"{prompt} {choice_str} ").strip().lower()
+            value = input(f'{prompt} {choice_str} ').strip().lower()
             if value == '':
                 return default
             if value in valid_choices:
                 return valid_choices[value]
-            print("Invalid input, try again.")
-
+            print('Invalid input, try again.')
 
     def check_config_exsits(self, file_path, content):
-    # To chekc whether WORDS in FILE.
         try:
-            if content in Path(file_path).read_text():
-                return True
+            return content in Path(file_path).read_text()
         except FileNotFoundError:
             return False
-        return False
-
 
     def get_platform(self):
         try:
-            text = Path('/etc/os-release').read_text()
-            lines = text.splitlines()
-            info = {line.split('=')[0]: line.split('=')[1].strip().replace('"', '') for line in lines}
-            platform_id = info.get('ID', '').lower()
-
-            for platform in self.supported_platform:
-                if platform.lower() in platform_id:
-                    return platform
-            print(f"Unsupported platform {platform_id}, add platform to supported list and test.")
-            sys.exit(1)
-
+            lines = Path('/etc/os-release').read_text().splitlines()
         except FileNotFoundError:
-            print(f"Unrecognized platform, exit.")
+            print('Unrecognized platform, exit.')
             sys.exit(1)
+
+        info = {}
+        for line in lines:
+            if '=' not in line:
+                continue
+            key, value = line.split('=', 1)
+            info[key] = shlex.split(value)[0] if value else ''
+
+        platform_id = info.get('ID', '').lower()
+        for platform in self.supported_platform:
+            if platform.lower() in platform_id:
+                return platform
+
+        print(f'Unsupported platform {platform_id}, add platform to supported list and test.')
+        sys.exit(1)
